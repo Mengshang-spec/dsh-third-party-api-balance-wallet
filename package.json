@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-wallet-switcher",
   "version": "0.2.4",
-  "description": "Third-party API wallet balance panel for DeepSeek Harness.",
+  "description": "第三方 API 接入 DSH 查询余额插件。",
   "repository": {
     "type": "git",
     "url": "https://github.com/Mengshang-spec/dsh-third-party-api-balance-wallet.git"
