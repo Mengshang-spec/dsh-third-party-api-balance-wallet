@@ -1,0 +1,28 @@
+{
+  "name": "@dsh-external/dsh-wallet-switcher",
+  "version": "0.2.4",
+  "description": "Third-party API wallet balance panel for DeepSeek Harness.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mengshang-spec/dsh-third-party-api-balance-wallet.git"
+  },
+  "homepage": "https://github.com/Mengshang-spec/dsh-third-party-api-balance-wallet#readme",
+  "type": "module",
+  "main": "lib/host.js",
+  "exports": {
+    ".": { "default": "./lib/host.js" },
+    "./client": { "default": "./lib/index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["lib/host.js", "lib/index.js", "src/balance.mjs", "src/index.mjs", "README.md", "cordis.patch.yml"],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check src/index.mjs && node --check src/balance.mjs && node --check lib/host.js && node --check lib/index.js",
+    "build": "node scripts/build.mjs"
+  },
+  "dsh": {
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-conversation"] },
+    "bundle": { "patch": "./cordis.patch.yml" }
+  },
+  "license": "MIT"
+}
