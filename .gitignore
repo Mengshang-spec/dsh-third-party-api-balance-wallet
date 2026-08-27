@@ -5,4 +5,5 @@ outputs/
 lib/lib/
 src/src/
 tests/tests/
+scripts/scripts/
 .DS_Store
