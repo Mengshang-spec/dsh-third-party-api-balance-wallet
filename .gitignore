@@ -2,4 +2,7 @@ node_modules/
 work/
 outputs/
 *.tgz
+lib/lib/
+src/src/
+tests/tests/
 .DS_Store
