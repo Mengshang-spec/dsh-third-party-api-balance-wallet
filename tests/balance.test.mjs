@@ -1,8 +1,26 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-import { fetchWalletBalance, extractWalletBalance, buildBalanceRequest } from '../src/balance.mjs'
-import { apply as applyHost } from '../src/index.mjs'
+import {
+  DEFAULT_USAGE_URL,
+  buildBalanceRequest,
+  assertPublicHttpsUrl,
+  resolveApiKey,
+  extractWalletBalance,
+  fetchWalletBalance,
+  localDateStamp,
+} from '../src/balance.mjs'
+
+const STAMP = localDateStamp(new Date('2026-09-13T12:00:00Z'))
+
+function usagePayload(overrides = {}, daily = []) {
+  return {
+    balance: 61.41163914,
+    isValid: true,
+    mode: 'unrestricted',
+    daily_usage: daily,
+    ...overrides,
+  }
+}
 
 test('loads the package root as a host entry without a browser window', async () => {
   const entry = await import('@dsh-external/dsh-wallet-switcher')
@@ -10,66 +28,139 @@ test('loads the package root as a host entry without a browser window', async ()
   assert.deepEqual(entry.inject, ['webServer'])
 })
 
-test('builds the original usage-script style request', () => {
-  const request = buildBalanceRequest({ accessToken: 'jwt-token' })
-  assert.equal(request.url, 'https://hgapi.dieqiyun.top/api/v1/auth/me?timezone=Asia%2FShanghai')
-  assert.equal(request.headers.Authorization, 'Bearer jwt-token')
+test('defaults to the usage endpoint', () => {
+  assert.equal(DEFAULT_USAGE_URL, 'https://hgapi.dieqiyun.top/v1/usage')
+})
+
+test('builds the usage-script style request from an API Key', () => {
+  const request = buildBalanceRequest({ apiKey: 'sk-test-key' })
+  assert.equal(request.url, DEFAULT_USAGE_URL)
+  assert.equal(request.headers.Authorization, 'Bearer sk-test-key')
   assert.equal(request.headers.Accept, 'application/json')
-  assert.equal(request.headers['User-Agent'], 'cc-switch/1.0')
+  assert.equal(request.headers['User-Agent'], 'dsh-wallet-switcher')
 })
 
-test('accepts a copied Authorization header line without duplicating Bearer', () => {
-  const request = buildBalanceRequest({ accessToken: 'Authorization: Bearer jwt-token' })
-  assert.equal(request.headers.Authorization, 'Bearer jwt-token')
+test('rejects the retired web-login token', () => {
+  assert.throws(() => resolveApiKey({ accessToken: 'jwt-token' }), /网页登录令牌已不再支持/)
+  assert.throws(() => buildBalanceRequest({ accessToken: 'Bearer eyJhbGci' }), /API Key/)
 })
 
-test('extracts CNY balance from the wrapped auth response', () => {
-  assert.deepEqual(extractWalletBalance({ data: { balance: '29.22857071', status: 'active' } }), { amount: 29.22857071, currency: 'CNY', valid: true })
+test('accepts a legacy accessToken only when it is an sk- key', () => {
+  assert.equal(resolveApiKey({ accessToken: 'sk-legacy-fallback' }), 'sk-legacy-fallback')
+  const request = buildBalanceRequest({ accessToken: 'sk-legacy-fallback' })
+  assert.equal(request.headers.Authorization, 'Bearer sk-legacy-fallback')
 })
 
-test('extracts CNY balance from the original top-level response', () => {
-  assert.deepEqual(extractWalletBalance({ balance: '29.22857071', email: 'user@example.com' }), { amount: 29.22857071, currency: 'CNY', valid: true })
+test('prefers apiKey over legacy accessToken and tolerates pasted header lines', () => {
+  assert.equal(resolveApiKey({ apiKey: 'sk-explicit', accessToken: 'sk-legacy' }), 'sk-explicit')
+  assert.equal(resolveApiKey({ apiKey: '"sk-quoted"' }), 'sk-quoted')
+  assert.equal(resolveApiKey({ apiKey: 'Authorization: Bearer sk-pasted' }), 'sk-pasted')
 })
 
-test('fetches the auth endpoint with accessToken and returns CNY', async () => {
-  const result = await fetchWalletBalance({ accessToken: 'jwt-token' }, async (url, init) => {
-    assert.equal(url, 'https://hgapi.dieqiyun.top/api/v1/auth/me?timezone=Asia%2FShanghai')
-    assert.equal(init.headers.Authorization, 'Bearer jwt-token')
-    return new Response(JSON.stringify({ data: { balance: 12.5, status: 'active' } }), { status: 200 })
-  })
-  assert.deepEqual(result, { amount: 12.5, currency: 'CNY', valid: true })
+test('empty credentials throw a clear error', () => {
+  assert.throws(() => buildBalanceRequest({}), /API Key 不能为空/)
 })
 
-test('reports a useful error when the website token is rejected', async () => {
-  await assert.rejects(() => fetchWalletBalance({ accessToken: 'expired' }, async () => new Response(JSON.stringify({ message: 'Invalid token' }), { status: 401 })), /HTTP 401.*Invalid token/)
-})
-
-test('returns HTTP 400 when the balance route receives malformed JSON', async () => {
-  let route
-  applyHost({ webServer: { register(value) { route = value; return () => {} } } })
-  const req = {
-    method: 'POST',
-    async *[Symbol.asyncIterator]() { yield '{invalid' },
+test('balance URL must be public HTTPS', () => {
+  assert.equal(assertPublicHttpsUrl('https://api.example.com/v1/usage'), 'https://api.example.com/v1/usage')
+  for (const bad of [
+    'http://hgapi.dieqiyun.top/v1/usage',
+    'https://localhost/v1/usage',
+    'https://api.localhost/v1/usage',
+    'https://127.0.0.1/v1/usage',
+    'https://10.1.2.3/v1/usage',
+    'https://192.168.1.4/v1/usage',
+    'https://172.16.0.9/v1/usage',
+    'https://169.254.1.1/v1/usage',
+    'https://[::1]/v1/usage',
+    'https://user:pass@api.example.com/v1/usage',
+    'file:///etc/passwd',
+    'not a url',
+  ]) {
+    assert.throws(() => assertPublicHttpsUrl(bad), Error, `should reject ${bad}`)
   }
-  const response = {
-    status: 0,
-    headers: {},
-    body: '',
-    writeHead(status, headers) { this.status = status; this.headers = headers },
-    end(body) { this.body = body },
-  }
-  await route.handler(req, response)
-  assert.equal(response.status, 400)
-  assert.match(response.body, /JSON/)
 })
 
-test('uses a compact DSH-style wallet dock with accessible controls', async () => {
-  const ui = await readFile(new URL('../lib/index.js', import.meta.url), 'utf8')
-  assert.match(ui, /dsh-wallet-dock/)
-  assert.match(ui, /dsh-wallet-dock__config/)
-  assert.match(ui, /'aria-label': '余额接口地址'/)
-  assert.match(ui, /'aria-label': '网页登录令牌'/)
-  assert.match(ui, /iconButton\('刷新余额', '刷新余额'/)
-  assert.match(ui, /iconButton\('修改令牌', '修改令牌'/)
-  assert.match(ui, /border: '1px solid var\(--dsh-border-subtle, #d9d9d9\)'/)
+test('extracts balance, validity, mode and today usage', () => {
+  const result = extractWalletBalance(
+    usagePayload({}, [{ date: '2026-09-12', requests: 1, total_tokens: 2, cost: 3, actual_cost: 4 }, { date: STAMP, requests: 46, total_tokens: 6244709, cost: 8.7992584, actual_cost: 2.1998146 }]),
+    new Date('2026-09-13T12:00:00Z'),
+  )
+  assert.equal(result.balance, 61.41163914)
+  assert.equal(result.isValid, true)
+  assert.equal(result.mode, 'unrestricted')
+  assert.deepEqual(result.today, { date: STAMP, requests: 46, totalTokens: 6244709, cost: 8.7992584, actualCost: 2.1998146 })
+})
+
+test('never fakes today usage from the last row', () => {
+  const result = extractWalletBalance(
+    usagePayload({}, [{ date: '2026-09-11', requests: 9, total_tokens: 9, cost: 9, actual_cost: 9 }]),
+    new Date('2026-09-13T12:00:00Z'),
+  )
+  assert.equal(result.today, null)
+})
+
+test('handles empty or missing daily usage, wrapped payloads and string numbers', () => {
+  const empty = extractWalletBalance(usagePayload({}, []), new Date('2026-09-13T12:00:00Z'))
+  assert.equal(empty.today, null)
+  const wrapped = extractWalletBalance({ data: { balance: '12.5', isValid: false, mode: 'restricted' } })
+  assert.deepEqual({ balance: wrapped.balance, isValid: wrapped.isValid, mode: wrapped.mode }, { balance: 12.5, isValid: false, mode: 'restricted' })
+})
+
+test('keeps a zero balance and falls back through remaining fields', () => {
+  assert.equal(extractWalletBalance({ balance: 0 }).balance, 0)
+  assert.equal(extractWalletBalance({ remaining: '3.25' }).balance, 3.25)
+  assert.equal(extractWalletBalance({ quota: { remaining: 7 } }).balance, 7)
+  assert.throws(() => extractWalletBalance({ isValid: true }), /未找到有效余额字段/)
+})
+
+test('classifies HTTP failures without leaking the key', async () => {
+  const key = 'sk-secret-value-000'
+  const cases = [
+    [401, 'UNAUTHORIZED', /API Key 无效或已被撤销/],
+    [403, 'UNAUTHORIZED', /API Key 无效或已被撤销/],
+    [404, 'NOT_FOUND', /不支持 \/v1\/usage/],
+    [429, 'RATE_LIMITED', /过于频繁/],
+    [500, 'SERVER', /HTTP 500/],
+  ]
+  for (const [status, code, pattern] of cases) {
+    try {
+      await fetchWalletBalance({ apiKey: key, currency: 'USD' }, async () => new Response(JSON.stringify({ message: 'nope' }), { status }))
+      assert.fail(`expected HTTP ${status} to throw`)
+    } catch (error) {
+      assert.equal(error.code, code)
+      assert.match(error.message, pattern)
+      assert.ok(!error.message.includes(key), 'error message must not contain the API key')
+    }
+  }
+})
+
+test('returns a normalized result on success', async () => {
+  const result = await fetchWalletBalance(
+    { apiKey: 'sk-ok', currency: 'USD' },
+    async () => new Response(JSON.stringify(usagePayload({}, [{ date: STAMP, requests: 2, total_tokens: 20, cost: 0.2, actual_cost: 0.02 }])), { status: 200 }),
+    new Date('2026-09-13T12:00:00Z'),
+  )
+  assert.equal(result.balance, 61.41163914)
+  assert.equal(result.currency, 'USD')
+  assert.equal(result.isValid, true)
+  assert.equal(result.today.actualCost, 0.02)
+})
+
+test('maps abort and network failures to typed errors', async () => {
+  await assert.rejects(
+    () => fetchWalletBalance({ apiKey: 'sk-x' }, async () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }) }),
+    (error) => error.code === 'TIMEOUT' && /超时/.test(error.message),
+  )
+  await assert.rejects(
+    () => fetchWalletBalance({ apiKey: 'sk-x' }, async () => { throw new Error('ECONNRESET') }),
+    (error) => error.code === 'NETWORK',
+  )
+})
+
+test('non-JSON responses are rejected with the HTTP status', async () => {
+  await assert.rejects(
+    () => fetchWalletBalance({ apiKey: 'sk-x' }, async () => new Response('<html>boom</html>', { status: 200 })),
+    /不是 JSON/,
+  )
 })

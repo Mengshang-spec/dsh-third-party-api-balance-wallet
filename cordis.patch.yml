@@ -2,5 +2,6 @@
     - id: dsh-wallet-switcher
       name: '@dsh-external/dsh-wallet-switcher'
       config:
-        balanceUrl: !!js process.env.DSH_WALLET_BALANCE_URL
-        accessToken: !!js process.env.DSH_WALLET_ACCESS_TOKEN
+        usageUrl: !!js process.env.DSH_WALLET_USAGE_URL
+        apiKey: !!js process.env.DSH_WALLET_API_KEY
+        currency: !!js process.env.DSH_WALLET_CURRENCY
