@@ -1,5 +1,10 @@
 # 更新记录
 
+## 未发布
+
+- 统一包名与仓库名：npm 包名从 `@dsh-external/dsh-wallet-switcher` 改为 `dsh-third-party-api-balance-wallet`，`cordis.patch.yml` 的插件引用、宿主/浏览器端 id 和测试引用同步更新。旧名是新装包时 `DECOMMISSIONED` 报错的来源。
+- 余额路由 `/api/dsh-wallet-switcher/*`、数据目录 `<profileDir>/dsh-wallet-switcher/` 保持不变，已保存的 API Key 不会丢失。
+
 ## 0.3.1
 
 - 自动发现不再写死楪祈云域名：信任 `~/.dsh/settings.yaml` 里配置过的所有 provider，按配置顺序取第一个「公网 HTTPS 且非官方 API」的站点作为余额来源——任何 Sub2API 站点都能零配置发现。

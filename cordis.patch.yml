@@ -1,6 +1,6 @@
 - insert:
     - id: dsh-wallet-switcher
-      name: '@dsh-external/dsh-wallet-switcher'
+      name: 'dsh-third-party-api-balance-wallet'
       config:
         usageUrl: !!js process.env.DSH_WALLET_USAGE_URL
         apiKey: !!js process.env.DSH_WALLET_API_KEY

@@ -4,4 +4,4 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 await mkdir(resolve(root, 'lib'), { recursive: true })
-console.log('dsh-wallet-switcher build ready')
+console.log('dsh-third-party-api-balance-wallet build ready')

@@ -23,7 +23,7 @@ function usagePayload(overrides = {}, daily = []) {
 }
 
 test('loads the package root as a host entry without a browser window', async () => {
-  const entry = await import('@dsh-external/dsh-wallet-switcher')
+  const entry = await import('dsh-third-party-api-balance-wallet')
   assert.equal(typeof entry.apply, 'function')
   assert.deepEqual(entry.inject, ['webServer'])
 })

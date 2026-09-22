@@ -1,4 +1,4 @@
-# dsh-wallet-switcher
+# dsh-third-party-api-balance-wallet
 
 在 DSH 输入框底部显示第三方 API 账户余额和今日用量的插件。
 
